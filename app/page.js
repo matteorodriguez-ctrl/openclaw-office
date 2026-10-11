@@ -1,24 +1,36 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, Shield, DollarSign, Activity, Database } from 'lucide-react'
+import { Building2, Users, DollarSign, Activity, Database, ClipboardList, Radio, ShieldCheck, HelpCircle, ScrollText, Server, Hammer } from 'lucide-react'
 import IsometricOffice from '../components/IsometricOffice'
 import ActivityLog from '../components/ActivityLog'
-import RequestPipeline from '../components/RequestPipeline'
 import StatsCards from '../components/StatsCards'
 import TeamDashboard from '../components/TeamDashboard'
-import SecurityDashboard from '../components/SecurityDashboard'
 import DatabaseDashboard from '../components/DatabaseDashboard'
 import CostDashboard from '../components/CostDashboard'
+import WorkboardDashboard from '../components/WorkboardDashboard'
+import ActivityDashboard from '../components/ActivityDashboard'
+import ApprovalsDashboard from '../components/ApprovalsDashboard'
+import QuestionsDashboard from '../components/QuestionsDashboard'
+import AuditDashboard from '../components/AuditDashboard'
+import ArchitectureDashboard from '../components/ArchitectureDashboard'
+import ConstructionArea from '../components/ConstructionArea'
+import PauseControl from '../components/PauseControl'
 
 const tabs = [
   { id: 'office', label: 'Main Office', icon: Building2 },
   { id: 'stats', label: 'Interaction Stats', icon: Activity },
   { id: 'team', label: 'Agent Thoughts', icon: Users },
   { id: 'cost', label: 'Cost Savings', icon: DollarSign },
-  { id: 'security', label: 'Security', icon: Shield },
+  { id: 'approvals', label: 'Approvals', icon: ShieldCheck },
+  { id: 'questions', label: 'Decisions', icon: HelpCircle },
   { id: 'database', label: 'Database', icon: Database },
+  { id: 'workboard', label: 'Workboard', icon: ClipboardList },
+  { id: 'activity', label: 'All Activity', icon: Radio },
+  { id: 'audit', label: 'Audit Trail', icon: ScrollText },
+  { id: 'architecture', label: 'Architecture', icon: Server },
+  { id: 'construction', label: 'Construction Area', icon: Hammer },
 ]
 
 export default function Home() {
@@ -28,18 +40,80 @@ export default function Home() {
     tokens: 0,
     savings: 0,
   })
-  const [activeRequest, setActiveRequest] = useState(null)
+  const [pendingApprovals, setPendingApprovals] = useState(0)
+  const [pendingQuestions, setPendingQuestions] = useState(0)
+  const [pauseState, setPauseState] = useState({ paused: false })
+
+  // Poll the locally-persisted pause state so the banner stays accurate
+  // even while the gateway itself is unreachable for other reads during
+  // an active suspension.
+  useEffect(() => {
+    const fetchPauseState = async () => {
+      try {
+        const res = await fetch('/api/gateway/control')
+        const json = await res.json()
+        setPauseState(json)
+      } catch (error) {
+        console.error('Failed to fetch pause state:', error)
+      }
+    }
+    fetchPauseState()
+    const interval = setInterval(fetchPauseState, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Pending approvals can mean a real agent is blocked right now waiting on
+  // human sign-off — poll independently of the slower header stats so the
+  // nav badge stays current.
+  useEffect(() => {
+    const fetchApprovalCount = async () => {
+      try {
+        const res = await fetch('/api/approvals')
+        const json = await res.json()
+        setPendingApprovals(json.approvals?.length || 0)
+      } catch (error) {
+        console.error('Failed to fetch approval count:', error)
+      }
+    }
+    fetchApprovalCount()
+    const interval = setInterval(fetchApprovalCount, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Pending decisions mean an agent has paused a task waiting on a human
+  // judgment call — poll independently so the nav badge stays current.
+  useEffect(() => {
+    const fetchQuestionCount = async () => {
+      try {
+        const res = await fetch('/api/questions')
+        const json = await res.json()
+        setPendingQuestions(json.questions?.length || 0)
+      } catch (error) {
+        console.error('Failed to fetch question count:', error)
+      }
+    }
+    fetchQuestionCount()
+    const interval = setInterval(fetchQuestionCount, 5000)
+    return () => clearInterval(interval)
+  }, [])
   
-  // Fetch stats for header
+  // Fetch stats for header — tokens/savings from the real gateway-backed
+  // cost comparison (lib/cost.js), tasks_completed from the legacy DB
+  // counter (still a rough proxy, informational only).
   useEffect(() => {
     const fetchHeaderStats = async () => {
       try {
-        const response = await fetch('/api/stats')
-        const data = await response.json()
+        const [statsRes, costRes] = await Promise.all([
+          fetch('/api/stats'),
+          fetch('/api/stats/cost'),
+        ])
+        const data = await statsRes.json()
+        const costData = await costRes.json()
+        const totals = costData?.totals || {}
         setHeaderStats({
-          tasks: data.allTime.tasks_completed || 0,
-          tokens: data.allTime.tokens.total || 0,
-          savings: Math.round(data.allTime.savings_usd || 0),
+          tasks: data.allTime?.tasks_completed || 0,
+          tokens: (totals.inputTokens || 0) + (totals.outputTokens || 0),
+          savings: Math.round(totals.savingsUsd || 0),
         })
       } catch (error) {
         console.error('Failed to fetch header stats:', error)
@@ -49,11 +123,6 @@ export default function Home() {
     fetchHeaderStats()
     const interval = setInterval(fetchHeaderStats, 30000)
     return () => clearInterval(interval)
-  }, [])
-
-  // Handle request updates from pipeline
-  const handleRequestUpdate = useCallback((request) => {
-    setActiveRequest(request)
   }, [])
 
   return (
@@ -86,6 +155,8 @@ export default function Home() {
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span className="text-xs text-green-400 font-bold">LIVE</span>
           </div>
+
+          <PauseControl />
         </div>
 
         {/* Quick stats */}
@@ -105,9 +176,27 @@ export default function Home() {
         </div>
       </motion.header>
 
+      {/* Paused banner — shown whenever the dashboard's locally-tracked
+          pause state says agents are suspended. Most other panels will
+          show stale/errored data while this is true, by design. */}
+      {pauseState.paused && (
+        <motion.div
+          className="flex items-center gap-3 mb-6 px-4 py-3 rounded-lg bg-yellow-900/20 border border-yellow-500/40 text-yellow-300 text-sm"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <span className="text-lg">⏸️</span>
+          <span>
+            <strong>Agents are paused.</strong> New cron jobs, heartbeats, and agent dispatch are
+            stopped. Active work is finishing naturally. Some dashboard data may show as
+            unavailable until you click &quot;Resume Agents&quot;.
+          </span>
+        </motion.div>
+      )}
+
       {/* Tab Navigation */}
       <motion.nav 
-        className="flex gap-2 mb-6 overflow-x-auto pb-2"
+        className="flex flex-wrap gap-2 mb-6"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
@@ -126,6 +215,16 @@ export default function Home() {
           >
             <tab.icon className="w-4 h-4" />
             <span className="hidden sm:inline">{tab.label}</span>
+            {tab.id === 'approvals' && pendingApprovals > 0 && (
+              <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold animate-pulse">
+                {pendingApprovals}
+              </span>
+            )}
+            {tab.id === 'questions' && pendingQuestions > 0 && (
+              <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-yellow-500 text-black text-[10px] font-bold animate-pulse">
+                {pendingQuestions}
+              </span>
+            )}
           </motion.button>
         ))}
       </motion.nav>
@@ -143,15 +242,12 @@ export default function Home() {
             {/* Office View */}
             <div className="xl:col-span-2">
               <div className="glass-card rounded-xl p-4 h-auto">
-                <IsometricOffice activeRequest={activeRequest} />
+                <IsometricOffice />
               </div>
             </div>
 
             {/* Sidebar */}
             <div className="space-y-4">
-              {/* Request Pipeline - NEW */}
-              <RequestPipeline onRequestUpdate={handleRequestUpdate} />
-              
               {/* Activity Log */}
               <ActivityLog />
             </div>
@@ -192,14 +288,25 @@ export default function Home() {
           </motion.div>
         )}
 
-        {activeTab === 'security' && (
+        {activeTab === 'approvals' && (
           <motion.div
-            key="security"
+            key="approvals"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
           >
-            <SecurityDashboard />
+            <ApprovalsDashboard />
+          </motion.div>
+        )}
+
+        {activeTab === 'questions' && (
+          <motion.div
+            key="questions"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <QuestionsDashboard />
           </motion.div>
         )}
 
@@ -211,6 +318,61 @@ export default function Home() {
             exit={{ opacity: 0, y: -20 }}
           >
             <DatabaseDashboard />
+          </motion.div>
+        )}
+
+        {activeTab === 'workboard' && (
+          <motion.div
+            key="workboard"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <WorkboardDashboard />
+          </motion.div>
+        )}
+
+        {activeTab === 'activity' && (
+          <motion.div
+            key="activity"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <ActivityDashboard />
+          </motion.div>
+        )}
+
+        {activeTab === 'audit' && (
+          <motion.div
+            key="audit"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <AuditDashboard />
+          </motion.div>
+        )}
+
+        {activeTab === 'architecture' && (
+          <motion.div
+            key="architecture"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <ArchitectureDashboard />
+          </motion.div>
+        )}
+
+        {activeTab === 'construction' && (
+          <motion.div
+            key="construction"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <ConstructionArea />
           </motion.div>
         )}
       </AnimatePresence>

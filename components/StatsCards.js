@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 export default function StatsCards({ initialStats }) {
   const [stats, setStats] = useState(null)
+  const [cost, setCost] = useState(null)
   const [animatedStats, setAnimatedStats] = useState({
     conversations: 0,
     tokens: 0,
@@ -16,9 +17,14 @@ export default function StatsCards({ initialStats }) {
   // Fetch real stats from API
   const fetchStats = useCallback(async () => {
     try {
-      const response = await fetch('/api/stats')
-      const data = await response.json()
+      const [statsRes, costRes] = await Promise.all([
+        fetch('/api/stats'),
+        fetch('/api/stats/cost'),
+      ])
+      const data = await statsRes.json()
+      const costData = await costRes.json()
       setStats(data)
+      setCost(costData?.error ? null : costData)
       setLoading(false)
     } catch (error) {
       console.error('Failed to fetch stats:', error)
@@ -36,12 +42,13 @@ export default function StatsCards({ initialStats }) {
   // Animate numbers when stats change
   useEffect(() => {
     if (!stats) return
+    const totals = cost?.totals || { inputTokens: 0, outputTokens: 0, actualCostUsd: 0, savingsUsd: 0 }
 
     const target = {
       conversations: stats.today.messages || 0,
-      tokens: stats.allTime.tokens.total || 0,
-      cost: stats.allTime.cost_usd || 0,
-      savings: Math.round(stats.allTime.savings_usd || 0),
+      tokens: totals.inputTokens + totals.outputTokens,
+      cost: totals.actualCostUsd || 0,
+      savings: Math.round(totals.savingsUsd || 0),
     }
 
     const duration = 1500
@@ -65,7 +72,7 @@ export default function StatsCards({ initialStats }) {
     }, interval)
 
     return () => clearInterval(timer)
-  }, [stats])
+  }, [stats, cost])
 
   // Show loading state
   if (loading) {
@@ -82,32 +89,34 @@ export default function StatsCards({ initialStats }) {
     )
   }
 
+  const totals = cost?.totals || { inputTokens: 0, outputTokens: 0, actualCostUsd: 0, equivalentCostUsd: 0, savingsUsd: 0 }
+
   const cards = [
     {
       label: "Today's Messages",
       value: animatedStats.conversations,
-      subValue: stats ? `${stats.today.tasks_completed} tasks` : '',
+      subValue: stats ? `${stats.today.tasks_completed} replies` : '',
       color: '#00f5ff',
       icon: '💬',
     },
     {
       label: 'Total Tokens',
       value: animatedStats.tokens.toLocaleString(),
-      subValue: stats ? `In: ${(stats.allTime.tokens.input / 1000).toFixed(0)}K / Out: ${(stats.allTime.tokens.output / 1000).toFixed(0)}K` : '',
+      subValue: `In: ${(totals.inputTokens / 1000).toFixed(0)}K / Out: ${(totals.outputTokens / 1000).toFixed(0)}K`,
       color: '#9d4edd',
       icon: '🔢',
     },
     {
-      label: 'API Cost (USD)',
+      label: 'Actual Cost (USD)',
       value: `$${animatedStats.cost.toFixed(2)}`,
-      subValue: stats ? `Today: $${stats.today.cost_usd.toFixed(2)}` : '',
+      subValue: 'what you actually paid',
       color: '#ff006e',
       icon: '💰',
     },
     {
-      label: 'Savings (USD)',
+      label: 'Cost Avoided (USD)',
       value: `$${animatedStats.savings.toLocaleString()}`,
-      subValue: stats ? `Today: $${Math.round(stats.today.savings_usd).toLocaleString()}` : '',
+      subValue: 'vs. paid commercial API, same tokens',
       color: '#39ff14',
       icon: '📈',
     },
@@ -181,19 +190,15 @@ export default function StatsCards({ initialStats }) {
               </div>
               <div>
                 <div className="text-gray-500">Tokens Used</div>
-                <div className="text-white font-bold">{stats.today.tokens.total.toLocaleString()}</div>
+                <div className="text-white font-bold">{(totals.inputTokens + totals.outputTokens).toLocaleString()}</div>
               </div>
               <div>
                 <div className="text-gray-500">Cost</div>
-                <div className="text-white font-bold">${stats.today.cost_usd.toFixed(2)}</div>
+                <div className="text-white font-bold">${totals.actualCostUsd.toFixed(2)}</div>
               </div>
               <div>
-                <div className="text-gray-500">AI Time</div>
-                <div className="text-white font-bold">{formatDuration(stats.today.task_time_ms)}</div>
-              </div>
-              <div>
-                <div className="text-gray-500">Human Equiv.</div>
-                <div className="text-green-400 font-bold">{formatDuration(stats.today.human_time_ms)}</div>
+                <div className="text-gray-500">Cost Avoided</div>
+                <div className="text-green-400 font-bold">${totals.savingsUsd.toFixed(2)}</div>
               </div>
             </div>
           </motion.div>
@@ -214,91 +219,30 @@ export default function StatsCards({ initialStats }) {
                 <div className="text-white font-bold">{stats.allTime.messages.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-gray-500">Tasks Completed</div>
+                <div className="text-gray-500">Replies Sent</div>
                 <div className="text-white font-bold">{stats.allTime.tasks_completed.toLocaleString()}</div>
               </div>
               <div>
                 <div className="text-gray-500">Input Tokens</div>
-                <div className="text-white font-bold">{(stats.allTime.tokens.input / 1000000).toFixed(2)}M</div>
+                <div className="text-white font-bold">{(totals.inputTokens / 1000000).toFixed(2)}M</div>
               </div>
               <div>
                 <div className="text-gray-500">Output Tokens</div>
-                <div className="text-white font-bold">{(stats.allTime.tokens.output / 1000000).toFixed(2)}M</div>
+                <div className="text-white font-bold">{(totals.outputTokens / 1000000).toFixed(2)}M</div>
               </div>
               <div>
                 <div className="text-gray-500">Total Cost</div>
-                <div className="text-red-400 font-bold">${stats.allTime.cost_usd.toFixed(2)}</div>
+                <div className="text-red-400 font-bold">${totals.actualCostUsd.toFixed(2)}</div>
               </div>
               <div>
-                <div className="text-gray-500">Total Savings</div>
-                <div className="text-green-400 font-bold">${Math.round(stats.allTime.savings_usd).toLocaleString()}</div>
+                <div className="text-gray-500">Cost Avoided</div>
+                <div className="text-green-400 font-bold">${totals.savingsUsd.toFixed(2)}</div>
               </div>
             </div>
           </motion.div>
         </div>
       )}
 
-      {/* Time Saved Visualization */}
-      {stats && stats.allTime.human_time_ms > 0 && (
-        <motion.div
-          className="glass-card rounded-xl p-4"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-        >
-          <h3 className="text-green-400 font-bold mb-3 flex items-center gap-2">
-            <span>⏰</span> Time Saved
-          </h3>
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <div className="text-gray-500 text-xs mb-1">AI Processing Time</div>
-              <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
-                <motion.div 
-                  className="h-full bg-cyan-500"
-                  initial={{ width: 0 }}
-                  animate={{ width: '10%' }}
-                  transition={{ duration: 1, delay: 0.7 }}
-                />
-              </div>
-              <div className="text-white text-sm mt-1">{formatDuration(stats.allTime.task_time_ms)}</div>
-            </div>
-            <div className="text-gray-500">vs</div>
-            <div className="flex-1">
-              <div className="text-gray-500 text-xs mb-1">Human Equivalent</div>
-              <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
-                <motion.div 
-                  className="h-full bg-green-500"
-                  initial={{ width: 0 }}
-                  animate={{ width: '100%' }}
-                  transition={{ duration: 1.5, delay: 0.7 }}
-                />
-              </div>
-              <div className="text-green-400 text-sm mt-1">{formatDuration(stats.allTime.human_time_ms)}</div>
-            </div>
-          </div>
-          <div className="text-center mt-3 text-green-400 font-bold">
-            🚀 {Math.round((stats.allTime.human_time_ms - stats.allTime.task_time_ms) / 3600000)} hours saved!
-          </div>
-        </motion.div>
-      )}
     </div>
   )
-}
-
-function formatDuration(ms) {
-  if (!ms || ms === 0) return '0s'
-  
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  
-  if (hours > 0) {
-    const remainingMinutes = minutes % 60
-    return `${hours}h ${remainingMinutes}m`
-  }
-  if (minutes > 0) {
-    const remainingSeconds = seconds % 60
-    return `${minutes}m ${remainingSeconds}s`
-  }
-  return `${seconds}s`
 }

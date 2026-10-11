@@ -18,6 +18,9 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# git is used by the Construction Area file browser (git ls-files) so repo
+# browsing respects .gitignore and skips internal .git objects.
+RUN apk add --no-cache git
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

@@ -1,14 +1,28 @@
-version: '3.8'
-
 services:
   openclaw-office:
     build: .
-    ports:
-      - "4200:4200"
+    image: openclaw-office-openclaw-office:latest
+    container_name: openclaw-office
+    # Must match the owner of ~/.openclaw (mode 700) so device.json is readable
+    user: "${OPENCLAW_UID:-1003}:${OPENCLAW_GID:-1003}"
+    # Host network so the gateway is reachable at ws://127.0.0.1:18789
+    network_mode: host
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: "4200"
+      OPENCLAW_DIR: /app/.openclaw
+      # Trust the audit viewer's self-signed cert (proxied at /audit-proxy)
+      NODE_EXTRA_CA_CERTS: /app/audit-ca.crt
     volumes:
+      - ${OPENCLAW_HOME:-/home/openclaw/.openclaw}:/app/.openclaw:ro
+      - ${AUDIT_CERT:-/home/openclaw/.config/openclaw-audit/tls/audit.crt}:/app/audit-ca.crt:ro
       - ./data:/app/data
       - ./openclaw-office.config.json:/app/openclaw-office.config.json:ro
       - ./public/sprites:/app/public/sprites:ro
+      # Construction Area: read-only mounts for studio project repos. Add one
+      # line per project here, and a matching row in the `projects` table
+      # (lib/db.js) with repo_path set to the container-side path below.
+      - /home/openclaw/tower-defense:/app/projects/tower-defense:ro
     env_file:
       - .env.local
     restart: unless-stopped

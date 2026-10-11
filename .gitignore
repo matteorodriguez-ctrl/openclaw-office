@@ -12,3 +12,5 @@ public/data/*
 openclaw-office.config.json
 *.log
 .vercel/
+*.bak
+*.pre-audit
