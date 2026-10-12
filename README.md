@@ -51,9 +51,9 @@ OpenClaw Office is a companion dashboard for [OpenClaw](https://github.com/openc
 It gives your AI agents a virtual office where you can watch them work in real-time.
 
 - 🎨 AI-generated office scenes matching your style
-- ⚡ Real-time workflow animations (task delegation, agent collaboration)
-- 🔗 Multi-step chain visualization (Agent A → Orchestrator → Agent B)
-- 📊 Activity log, cost savings tracker, team stats
+- 🟢 Live per-agent status in the isometric office (idle / working, with a pulse animation)
+- 📊 Activity log, real token-cost-vs-equivalent-paid-API savings tracker, team stats
+- ✅ Workboard with an approval gate for irreversible or judgment-call work
 - 🔌 Works with any OpenClaw instance
 
 ## Quick Start
@@ -194,8 +194,8 @@ All environment variables are **optional**. The dashboard works without any of t
 
 ## Features
 
-### Real-Time Workflow Visualization
-Watch tasks flow between agents with animated mail envelopes. Multi-step delegation chains show the full path: User → Orchestrator → Agent A → Agent B → Response.
+### Live Agent Status
+Each agent sprite shows idle/working state in the isometric office, with a subtle pulse animation while a task is in progress.
 
 ### Dynamic Agent Detection
 The dashboard periodically checks your OpenClaw gateway for agent changes. When new agents appear or existing ones are removed, you'll get a notification with options to update your config and regenerate the office image.
