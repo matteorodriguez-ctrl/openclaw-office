@@ -4,11 +4,18 @@ Your virtual AI office — visualize multi-agent workflows in real-time.
 
 ![OpenClaw Office Dashboard](public/sprites/office-complete.png)
 
-## 🎮 This Deployment — OpenClaw AI Game Studio
+## 🏗️ This Deployment — OpenClaw AI Studio
 
-This fork runs the live dashboard for a self-hosted OpenClaw AI game-development
-studio. It's the control room for a set of agents building a Godot game
-(`tower-defense`), monitored and directed via Discord + this dashboard.
+This fork runs the live dashboard for a self-hosted OpenClaw AI development
+studio — a general framework for running and monitoring AI agent teams
+across multiple projects, not tied to any single game or codebase. New
+projects are added by mounting their repo in `docker-compose.yml` and
+adding a row to the `projects` table (`lib/db.js`); each then gets its own
+Construction Area entry (branch browsing, commit graph, plan viewer) with
+no code changes required. The studio is monitored and directed via Discord
++ this dashboard.
+
+Currently active project: a Godot game, `tower-defense`.
 
 - **Server**: `192.168.64.240`, app lives at `/home/openclaw/openclaw-office`
 - **Remotes**: `origin` → this fork (`matteorodriguez-ctrl/openclaw-office`),
@@ -30,7 +37,7 @@ studio. It's the control room for a set of agents building a Godot game
 | **Pause Control** | One-click pause/resume for all agent tasks & workflows (used when testing without a GPU) |
 | **Audit Trail** | Full history of agent actions, proxied from the audit viewer |
 | **Architecture** | Studio architecture diagram, model-tier table, and agent guidelines (mirrors `STUDIO.md`) |
-| **Construction Area** | GitHub-style repo browser for the studio's game projects: branch switcher, commit graph, studio plan + per-project plan (`GDD.md`) viewer. Built to support multiple future game projects — add a repo mount in `docker-compose.yml` + a row in the `projects` table (`lib/db.js`) |
+| **Construction Area** | GitHub-style repo browser, interchangeable across projects: branch switcher, commit graph, studio plan + per-project plan viewer. Add a new project with one volume mount (`docker-compose.yml`) + one row in the `projects` table (`lib/db.js`) — no code changes needed |
 
 Discord reports run twice daily (8am / 10pm) summarizing work pending
 approval, work completed, and work in progress — replacing an earlier
@@ -39,7 +46,9 @@ approval, work completed, and work in progress — replacing an earlier
 ### Related services on the host (outside Docker)
 
 - `openclaw-webgame.service` (systemd, user `openclaw`) — serves the Godot
-  Web export of `tower-defense` over HTTPS at `https://192.168.64.240:8443`
+  Web export of the current project (`tower-defense`) over HTTPS at
+  `https://192.168.64.240:8443`; project-specific, not part of the core
+  framework
 - `openclaw-gateway.service`, `openclaw-audit.service`,
   `openclaw-survey.service`, `openclaw-usage-bridge.service` — the OpenClaw
   gateway and supporting agent infrastructure this dashboard visualizes
