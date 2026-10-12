@@ -4,7 +4,48 @@ Your virtual AI office — visualize multi-agent workflows in real-time.
 
 ![OpenClaw Office Dashboard](public/sprites/office-complete.png)
 
+## 🎮 This Deployment — OpenClaw AI Game Studio
+
+This fork runs the live dashboard for a self-hosted OpenClaw AI game-development
+studio. It's the control room for a set of agents building a Godot game
+(`tower-defense`), monitored and directed via Discord + this dashboard.
+
+- **Server**: `192.168.64.240`, app lives at `/home/openclaw/openclaw-office`
+- **Remotes**: `origin` → this fork (`matteorodriguez-ctrl/openclaw-office`),
+  `upstream` → the original template (`wickedapp/openclaw-office`). Pull
+  upstream improvements with `git fetch upstream && git merge upstream/master`.
+- **Redeploy**: `sudo bash -c 'cd /home/openclaw/openclaw-office && docker compose up -d --build'`
+- **Compute**: CPU-only Ollama today (qwen2.5:14b primary), with an NVIDIA
+  Tesla T4 (16GB VRAM) incoming to move coding models onto GPU — see the
+  **Architecture** tab or `~/.openclaw/workspace/STUDIO.md` for the full
+  studio diagram and model-tier routing rules.
+
+### Features added beyond the upstream template
+
+| Tab | What it does |
+|---|---|
+| **Workboard** | Full task/approval pipeline — requests, decisions, task history, per-session transcripts |
+| **Agent Thoughts** | Live view into each agent's current task and reasoning |
+| **Approvals / Decisions** | Gate for irreversible or judgment-call work; agents pause for your sign-off |
+| **Pause Control** | One-click pause/resume for all agent tasks & workflows (used when testing without a GPU) |
+| **Audit Trail** | Full history of agent actions, proxied from the audit viewer |
+| **Architecture** | Studio architecture diagram, model-tier table, and agent guidelines (mirrors `STUDIO.md`) |
+| **Construction Area** | GitHub-style repo browser for the studio's game projects: branch switcher, commit graph, studio plan + per-project plan (`GDD.md`) viewer. Built to support multiple future game projects — add a repo mount in `docker-compose.yml` + a row in the `projects` table (`lib/db.js`) |
+
+Discord reports run twice daily (8am / 10pm) summarizing work pending
+approval, work completed, and work in progress — replacing an earlier
+15-minute-interval notification that was too noisy.
+
+### Related services on the host (outside Docker)
+
+- `openclaw-webgame.service` (systemd, user `openclaw`) — serves the Godot
+  Web export of `tower-defense` over HTTPS at `https://192.168.64.240:8443`
+- `openclaw-gateway.service`, `openclaw-audit.service`,
+  `openclaw-survey.service`, `openclaw-usage-bridge.service` — the OpenClaw
+  gateway and supporting agent infrastructure this dashboard visualizes
+
 ## What is this?
+
 
 OpenClaw Office is a companion dashboard for [OpenClaw](https://github.com/openclaw/openclaw).
 It gives your AI agents a virtual office where you can watch them work in real-time.
@@ -236,29 +277,36 @@ WantedBy=multi-user.target
 
 ```
 openclaw-office/
-├── app/                    # Next.js App Router
-│   ├── page.js            # Main dashboard
-│   └── api/               # REST + SSE endpoints
-│       ├── workflow/       # Workflow events & SSE stream
-│       ├── agents/sync/   # Agent discovery & sync
-│       ├── generate/      # Image generation trigger
-│       ├── stats/         # Token & cost statistics
-│       └── config/        # Runtime config access
-├── cli/                   # CLI tool (npx openclaw-office)
-│   ├── commands/          # init, generate, start, status
-│   └── lib/               # Gateway, image gen, prompts
-├── components/            # React components
-│   ├── IsometricOffice.js # Main office visualization
-│   ├── AgentSprite.js     # Agent avatar rendering
-│   ├── RequestPipeline.js # Workflow animation
+├── app/
+│   ├── page.js                    # Main dashboard (tab registry + layout)
+│   └── api/
+│       ├── workboard/             # Task/approval pipeline + session transcripts
+│       ├── approvals/, questions/ # Approval gate & decision endpoints
+│       ├── agents/                # Agent discovery, status, messaging
+│       ├── construction/          # Construction Area: tree/file/plan/branches/graph
+│       ├── cron/                  # Scheduled job control (incl. pause/resume)
+│       ├── gateway/control/       # Pause control for the OpenClaw gateway
+│       ├── stats/, activity/      # Interaction stats, cost tracking, activity feed
+│       ├── telegram/, generate/   # Telegram webhook, office image generation
+│       └── database/, health/     # Raw DB inspection, healthcheck
+├── components/
+│   ├── IsometricOffice.js         # Main office visualization
+│   ├── WorkboardDashboard.js      # Workboard tab
+│   ├── ApprovalsDashboard.js, QuestionsDashboard.js
+│   ├── PauseControl.js            # Pause/resume all agent work
+│   ├── AuditDashboard.js          # Audit trail viewer
+│   ├── ArchitectureDashboard.js   # Studio architecture + model tiers
+│   ├── ConstructionArea.js        # Git repo browser + studio/project plans
+│   ├── CommitGraph.js             # SVG commit/branch graph for Construction Area
+│   ├── AgentDetailModal.js, CronJobDetailModal.js
 │   └── ...
-├── lib/                   # Shared server utilities
-│   ├── config.js          # Config loader
-│   ├── event-bus.js       # SSE event system
-│   ├── agent-sync.js      # Gateway agent detection
-│   ├── db.js              # SQLite database
-│   └── openclaw.js        # Token tracking
-└── public/sprites/        # Office images & agent sprites
+├── lib/
+│   ├── db.js                      # SQLite (requests, tasks, events, projects, app_state)
+│   ├── construction.js            # Git-backed project browsing helpers
+│   ├── openclaw-ws.js, openclaw.js, agent-sync.js, workflow.js
+│   ├── event-bus.js, telegram.js, cost.js, config.js
+├── cli/                           # Setup wizard (init, generate, start, status)
+└── public/sprites/                # Office images & agent sprites
 ```
 
 ## Contributing
